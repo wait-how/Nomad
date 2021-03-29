@@ -1,0 +1,21 @@
+chip is 5MHz
+async to 65kbps
+signal to rc/tc controls bit rate
+
+min clock cycle time is 0.95uS
+or 450ns high + 450ns low + 50ns extra
+
+goal is 115200, 57600, 38400, 19200, then 9600.
+
+uart - 8 data bits + 1 start bit + 1 stop bit
+10 bits/sec
+@9600 - bit time is 104 uS
+
+bit rate = 1 / baud rate
+
+1/115200 = 8.680555555 uS per bit - 115,200 kHz clock or 0.11520... MHz
+1.8432MHz / 16 = 115200kHz!
+
+clock is ok.
+
+(irrespective of master clock!)

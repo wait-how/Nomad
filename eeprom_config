@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+
+import sys # for exit
+import os # for checking file existance
+from math import ceil # for arithmetic
+import argparse # for argument processing
+import logging # for simple debug logger
+from time import sleep # for timing
+
+# add values to dictionary for different chips
+eeprom_id_values = {0x7: "GLS29EE010", 0x8: "GLS29VE010"}
+eeprom_manufacturer_values = {0xBF: "Greenliant"}
+
+def eeprom_erase():
+	""" erase the eeprom chip to its default state """
+	print("Erasing EEPROM chip...", end='')
+	serport.write("ER;".encode('ascii', 'encode'))
+	temp = serport.readline()
+	while temp != b'done.\r\n':
+		temp = serport.readline()
+	print("done.")
+
+def eeprom_id():
+	""" get version info from eeprom and check against the table of known ids """
+	print("Arduino version info: ", end='')
+	serport.write("VE;".encode('ascii', 'encode'))
+	print(serport.readline().decode('ascii').strip('\n')) # hardware programmer version
+	mf = serport.readline().decode('ascii').strip('\n') # manufacturer ID
+	num = serport.readline().decode('ascii').strip('\n') # device ID
+	print("Chip Device: ", end='')
+	
+	# try to print a friendlier name, if one exists in the table
+	if int(num[11:14], 16) in eeprom_id_values:
+		print(eeprom_id_values[int(num[11:14], 16)])
+	else:
+		print(num[11:14])
+	
+	print("Chip Manufacturer: ", end='')
+
+	if int(mf[17:21], 16) in eeprom_manufacturer_values:
+		print(eeprom_manufacturer_values[int(mf[17:21], 16)])
+	else:
+		print(mf[17:21])
+	
+def eeprom_write():
+	""" write a binary to the eeprom in 128-byte blocks
+	
+	Block sizes of 128 bytes are used since that's the size of the page buffer of the eeprom.
+	Sent in 32-byte segments because the Arduino has a maximum serial buffer of 64 bytes, and making sure the buffer is fully drained is a pain
+
+	"""
+	try:
+		with open(args.binary, "rb") as binfile:
+			bindata = binfile.read(EEPROM_SIZE)
+	except IOError:
+		logger.error("binary cannot be opened!")
+		sys.exit(4)
+	else:
+		logger.info("binary located.")
+	
+	# write all the pages up to the last one, since the last one may not be on a page boundary.
+	
+	endpage = len(bindata) + ((128 - len(bindata)) % 128)
+	
+	print("Writing " + str(endpage) + " bytes to EEPROM...")
+	
+	for page in range(0, endpage, 128):
+		page_str = "WP:" + str(page) + ":"
+		byte_arr = bytearray() # create a null bytearray
+
+		for byte in range(0, 128):
+			if (page + byte) >= len(bindata):
+				byte_arr.append(0)
+			else:
+				byte_arr.append(bindata[page + byte])
+		logger.debug(page_str)
+		logger.debug(byte_arr)
+
+		serport.write(page_str.encode("ascii", "encode"))
+		serport.write(byte_arr[0:32]) # split up for timing reasons, because the Arduino Mega only has a 64-byte serial buffer
+		serport.write(byte_arr[32:64])
+		serport.write(byte_arr[64:96])
+		if page == endpage - 1 and byte_arr[127] == 0xA:
+			byte_arr[127] = 0 # take out EOF
+		serport.write(byte_arr[96:128])
+		
+		temp = serport.readline()
+		print("writing page " + str(page // 128) + "/" + str((endpage // 128) - 1) + "...")
+		while temp != b'done.\r\n':
+			temp = serport.readline()
+	print("done.")
+
+def eeprom_read():
+	""" read out the eeprom, directing binary to an output file. 
+	
+	A binary will be created if the file passed by the '-b' option doesn't exist.
+	File contents are in hex, for ease of use.
+	
+	"""
+	print("Reading ", end='')
+	print(str(EEPROM_SIZE), end='')
+	print(" bytes out of EEPROM... ")
+	
+	try:
+		with open(args.binary, "wb") as readfile:
+			logger.info("binary opened.")
+
+			for page in range(0, EEPROM_SIZE, 128):
+				page_str = "RP:" + str(page) + ";"
+				serport.write(page_str.encode("ascii", "encode"))
+				
+				temp = serport.readline()[:-1] # strip out \n
+				logger.debug(temp)
+				readfile.write(temp)
+
+	except IOError:
+		logger.error("binary cannot be opened!")
+		sys.exit(5)
+
+if __name__ == "__main__":
+	logger = logging.getLogger('eeprom_parse_logger')
+	
+	parser = argparse.ArgumentParser(description='Python script to interface with an Arduino EEPROM-writing interpreter.')
+	parser.add_argument('--version', action='version', version='EEPROM flasher tool v0.2')
+	parser.add_argument('-a', '--action', type=str, default='nop', help='action to perform: id, read, write, and erase.')
+	parser.add_argument('-d', '--device', type=str, help='device to communicate with, usually something like \'/dev/ttyUSB0\'.')
+	parser.add_argument('-v', '--verbose', type=str, default='', help='enable more verbose output, options are \'info\' and \'debug\'.')
+	parser.add_argument('-b', '--binary', type=str, default='', help='binary to manipulate.')
+	parser.add_argument('-s', '--size', type=int, default=0x20000, help='EEPROM size, defaults to 128K.')
+	parser.add_argument('-p', '--speed', type=int, default=250000, help='speed at which to communicate with the arduino, defaults to 250k baud')
+	args = parser.parse_args()
+
+	EEPROM_SIZE = args.size
+
+	if args.verbose == 'info':
+		logger.setLevel(logging.INFO)
+		logging.info("dummy") # not sure why I have to do this, but logging is silent without it.
+		logger.info("Verbose information enabled.")
+	elif args.verbose == 'debug':
+		logger.setLevel(logging.DEBUG)
+		logging.debug("dummy")
+		logger.debug("Debug information enabled.")
+	try:
+		import serial
+	except ModuleNotFoundError:
+		logger.error("pyserial module not found!")
+		logger.debug("try \'python -m pip install pyserial\'")
+		sys.exit(2)
+	else:
+		logger.info("pyserial module found.")
+	
+	if args.device == None:
+		logger.error('Device file cannot be opened.')
+		sys.exit(1)
+	
+	logger.info("Opening serial port with 8N1 " + str(args.speed) + " baud settings...")
+	serport = serial.Serial(args.device, args.speed, timeout=5)
+	serport.readline() # swallow greeting message from arduino, remove this?
+
+	if args.action == 'erase':
+		eeprom_erase()
+	elif args.action == 'id':
+		eeprom_id()
+	elif args.action == 'write':
+		eeprom_write()
+	# note - this function reads out the whole 128K of EEPROM memory by default.  This might take a while.
+	elif args.action == 'read':
+		eeprom_read()
+	elif args.action == 'nop':
+		print("No action given, doing nothing.")
+	else:
+		logger.error("unknown action!")
+		sys.exit(1)
+	

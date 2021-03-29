@@ -1,0 +1,9 @@
+360mA for processor itself
+5mA for logic, guessing at this * 9 = 45mA
+
+60mA for RAM * 2 = 120mA
+30mA for ROM * 2 = 60mA
+
+= 585mA max current draw, well below 7805's max of 1.5A.
+
+measured current draw is ~270mA, 7805 gets a bit hot, put a heatsink on it to look cool
