@@ -5,15 +5,31 @@ A 68000 board.
 ## Details
 See hackaday page.
 
+### Setup
+GNU binutils needs to be in the PATH variable, and built for [m68k-elf](https://daveho.github.io/2012/10/26/m68k-elf-cross-compiler.html).  Version 2.31 has been tested, but most other versions of binutils should work as well.
+
+### Usage
+Sample test binary upload:
+```
+$ make test # build the test executable, view assembly to make sure everything is right
+$ ./split test.bin # splits the test.bin binary into high and low binaries
+$ ./eeprom_config --action write --device /dev/ttyUSB0 --binary test.bin.msb # write each eeprom chip, insert into board
+$ ./eeprom_config --action write --device /dev/ttyUSB0 --binary test.bin.lsb
+```
+- `make test`: assembles the src/test/test.S file and dumps assembly
+- `make boot`: assembles the bootloader
+- `make app`: assembles an application that sits after the bootloader
+- `make clean`: clean binaries out
+
 ### Memory map
-0x00000 🠂 0x1FFFF: EEPROM  
-	0x000 🠂 0x400: EVT  
-	0x400 🠂 0x1FFFF: Bootloader and lib code - write-protected as this (will) set up the MMU.  
-0x20000 🠂 0x3FFFF: "common" SRAM - accessible to all programs (put application code here)  
-	0x3FC00 🠂 0x3FFFF: Program data (1024 bytes)  
-		0x3FC00 🠂 0x3FC3F: MFP UART buffer (64 bytes)  
-		0x3FC40 🠂 0x3FCFF: Reserved kernel space (used for EEPROM updates)  
-0x40000 🠂 0x400FF?: MFP  
+0x00000 🠂 0x1FFFF: EEPROM
+	0x000 🠂 0x400: EVT
+	0x400 🠂 0x1FFFF: Bootloader and lib code - write-protected as this (will) set up the MMU.
+0x20000 🠂 0x3FFFF: "common" SRAM - accessible to all programs (put application code here)
+	0x3FC00 🠂 0x3FFFF: Program data (1024 bytes)
+		0x3FC00 🠂 0x3FC3F: MFP UART buffer (64 bytes)
+		0x3FC40 🠂 0x3FCFF: Reserved kernel space (used for EEPROM updates)
+0x40000 🠂 0x400FF?: MFP
 
 calling convention:
  - everything is callee-saved except for a0, a1, d0, and d1
@@ -21,7 +37,7 @@ calling convention:
 
 ## Revision 1
 Status: ordered, assembled, and partially tested.
-  
+
  - Things that were broken:
 	 - Bought a tantulum cap instead of an electrolytic one, didn't notice, and it blew on me
 	 - RX buffering was inverted, luckily caught it before it broke anything
@@ -127,3 +143,4 @@ Status: schematic created, but revisions have not been checked either by hand or
 	 - Might teach me something about proper motor control
 	 - Uses either a cardboard or LEGO structure to read in holes punched into the tape
 	 - Once that is done, use a solenoid motor to possibly punch holes in a new tape and output it
+
