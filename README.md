@@ -12,6 +12,8 @@ The name "Nomad" was chosen because the board contains all one needs in order to
 
 This project is currently shelved because my 68000 broke and I don't really want to buy another one without thinking of some sort of application for this thing.
 
+![pic](https://github.com/PICOVERAVR/Nomad/blob/main/hardware/Photos/Board%20Final.jpeg)
+
 ## Details
 ### Overview
   The Nomad board is a 68000/68010 compatible microcomputer with 128K of SRAM and 128K of EEPROM memory, with the EEPROM being in a convenient PLCC socket for repeated removal.  The Nomad board includes a MK68901 peripheral chip to enable microcontroller-like functionality, including 4 timers, a buffered 115200 baud 8N1 UART interface, and an 8-bit I/O port, all with processor interrupt capabilities.  The board can be clocked anywhere from 8MHz (the minimum speed of the processor) to somewhere around 14MHz (max speed of the MK peripheral).
